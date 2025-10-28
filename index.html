@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Darts Zufallsturnier Auslosung</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pop-in { 0% { transform: scale(0.9); opacity: 0; } 60% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); } }
+    @keyframes float-up { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes target-pulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.55); } 100% { box-shadow: 0 0 0 18px rgba(16,185,129,0); } }
+    .pop-in { animation: pop-in 350ms ease-out both; }
+    .float-up { animation: float-up 400ms ease-out both; }
+    .dart-button { position: relative; overflow: hidden; }
+    .dart-button::before { content: "🎯"; position: absolute; font-size: 72px; opacity: 0.15; right: -8px; top: -8px; transform: rotate(-15deg); }
+    .glass { background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06)); backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.08); }
+    .overlay { position: fixed; inset: 0; background: rgba(2,6,23,0.85); display: flex; align-items: center; justify-content: center; z-index: 50; }
+    .fly-chip {
+      position: fixed;
+      z-index: 60;
+      pointer-events: none;
+      padding: 0.5rem 0.75rem;
+      border-radius: 9999px;
+      background: rgb(16 185 129);
+      color: #052e2b;
+      font-weight: 800;
+      border: 1px solid rgba(255,255,255,0.25);
+      box-shadow: 0 10px 25px rgba(16,185,129,0.35);
+      transform: translate(0,0) scale(1);
+      transition: transform 1100ms cubic-bezier(.22,.61,.36,1);
+      will-change: transform;
+    }
+    .target-pulse { animation: target-pulse 900ms ease-out 1; }
+    .member-chip { display:inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; background: rgb(255 255 255 / 0.08); border: 1px solid rgb(255 255 255 / 0.1); font-size: 0.75rem; }
+    @media print {
+      body { background: white !important; color: black !important; }
+      .no-print { display: none !important; }
+      .glass { background: white !important; color: black !important; border-color: #00000020 !important; }
+      .bg-slate-800\/60, .bg-slate-800\/30 { background: #f5f5f5 !important; }
+      .text-slate-300, .text-slate-400, .text-slate-200 { color: #111 !important; }
+      .border-white\/10 { border-color: #00000020 !important; }
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-900 text-slate-100 selection:bg-emerald-500/30">
+  <div id="app" class="w-full mx-auto p-2 md:p-4 max-w-[100vw]">
+    <header class="mb-6 md:mb-8">
+      <h1 class="text-3xl md:text-4xl font-black tracking-tight mb-2">Darts Zufallsturnier Auslosung</h1>
+      <p class="text-slate-300">Konfiguriere dein Turnier und starte die animierte Auslosung.</p>
+    </header>
+
+    <!-- Einstellungen: volle Breite -->
+    <section class="glass rounded-2xl p-4 md:p-6 no-print">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold">Einstellungen</h2>
+        <button @click="showSettingsExpanded = !showSettingsExpanded"
+                class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm">
+          {{ showSettingsExpanded ? 'Einstellungen ausblenden' : 'Einstellungen einblenden' }}
+        </button>
+      </div>
+      <div v-show="showSettingsExpanded">
+
+      <div class="grid md:grid-cols-3 gap-4">
+        <div>
+          <label class="block font-semibold mb-2">Teamformat</label>
+          <div class="flex gap-3 flex-wrap">
+            <label class="inline-flex items-center gap-2">
+              <input type="radio" class="radio" v-model="teamFormat" value="einzel" />
+              <span>Einzelturnier</span>
+            </label>
+            <label class="inline-flex items-center gap-2">
+              <input type="radio" class="radio" v-model="teamFormat" value="partner" />
+              <span>Partnerturnier (bei ungerader Anzahl entsteht 3er‑Team)</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold mb-2">Spielformat</label>
+          <div class="flex gap-3 flex-wrap">
+            <label class="inline-flex items-center gap-2">
+              <input type="radio" class="radio" v-model="spielFormat" value="ko" />
+              <span>KO</span>
+            </label>
+            <label class="inline-flex items-center gap-2">
+              <input type="radio" class="radio" v-model="spielFormat" value="gruppen" />
+              <span>Gruppenphase</span>
+            </label>
+          </div>
+        </div>
+
+        <div v-if="spielFormat === 'gruppen'">
+          <label class="block font-semibold mb-2">Gruppeneinstellung</label>
+          <div class="flex gap-3 flex-wrap mb-2">
+            <label class="inline-flex items-center gap-2">
+              <input type="radio" class="radio" v-model="gruppenModus" value="anzahl" />
+              <span>Anzahl Gruppen</span>
+            </label>
+            <label class="inline-flex items-center gap-2">
+              <input type="radio" class="radio" v-model="gruppenModus" value="groesse" />
+              <span>Gruppengröße</span>
+            </label>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div v-if="gruppenModus === 'anzahl'">
+              <label class="block text-sm text-slate-300 mb-1">Anzahl Gruppen</label>
+              <input type="number" min="1" class="input" v-model.number="anzahlGruppen" />
+            </div>
+            <div v-else>
+              <label class="block text-sm text-slate-300 mb-1">Gruppengröße</label>
+              <input type="number" min="2" class="input" v-model.number="gruppengroesse" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <details class="mt-4 bg-slate-800/40 rounded-xl border border-white/10 p-3">
+        <summary class="cursor-pointer font-semibold text-slate-200">Animation</summary>
+        <div class="mt-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-sm text-slate-300 mb-1">Spieler/Teams → Gruppen/Teams (ms)</label>
+            <input type="number" min="100" step="50" class="input" v-model.number="speedTeamsMs" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-300 mb-1">Pause Gruppen-Ziehung (ms)</label>
+            <input type="number" min="0" step="50" class="input" v-model.number="pauseTeamsMs" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-300 mb-1">Teams/Spieler → KO-Bracket (ms)</label>
+            <input type="number" min="100" step="50" class="input" v-model.number="speedBracketMs" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-300 mb-1">Pause KO-Ziehung (ms)</label>
+            <input type="number" min="0" step="50" class="input" v-model.number="pauseBracketMs" />
+          </div>
+        </div>
+      </details>
+
+      <details class="mt-3 bg-slate-800/40 rounded-xl border border-white/10 p-3">
+        <summary class="cursor-pointer font-semibold text-slate-200">Darstellung (KO-Layout)</summary>
+        <div class="mt-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-sm text-slate-300 mb-1">Matchbreite (px)</label>
+            <input type="number" min="160" step="10" class="input" v-model.number="colWidth" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-300 mb-1">Matchhöhe (px)</label>
+            <input type="number" min="60" step="5" class="input" v-model.number="matchHeight" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-300 mb-1">Spaltenabstand (px)</label>
+            <input type="number" min="40" step="10" class="input" v-model.number="colGap" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-300 mb-1">Vertikaler Abstand (px)</label>
+            <input type="number" min="12" step="4" class="input" v-model.number="gapY" />
+          </div>
+        </div>
+      </details>
+
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-slate-300">Auto-Namen</label>
+          <input type="number" min="2" class="w-20 input" v-model.number="autoSpielerAnzahl" />
+        </div>
+        <button class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm" @click="generiereSpieler()">Namen erzeugen</button>
+        <button class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm" @click="openSpielerDialog()">Spieler eingeben ({{ spieler.length }})</button>
+
+        <div class="ms-auto flex items-center gap-3">
+          <button :disabled="!kannAuslosen" @click="starteAuslosung"
+            class="dart-button px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg shadow-emerald-900/20">
+            Auslosen
+          </button>
+          <button @click="zuruecksetzen" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10">
+            Zurücksetzen
+          </button>
+          <button @click="drucken" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10">
+            Drucken
+          </button>
+        </div>
+      </div>
+    </div>
+    </section>
+
+    <!-- Turnieranzeige: Bracket / Gruppen -->
+    <section class="glass rounded-2xl p-4 md:p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold">Turnier</h2>
+        <span v-if="isDrawing" class="text-emerald-400 animate-pulse">Auslosung läuft…</span>
+      </div>
+
+      <!-- Gruppenphase -->
+      <div v-if="spielFormat === 'gruppen'">
+        <!-- Toggle für Gruppenanzeige -->
+        <div v-if="gruppenErgebnis.length" class="no-print flex items-center justify-between mb-2">
+          <div class="text-slate-300 text-sm">Gruppen</div>
+          <button @click="showGroupsExpanded = !showGroupsExpanded"
+                  class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm">
+            {{ showGroupsExpanded ? 'Gruppen ausblenden' : 'Gruppen einblenden' }}
+          </button>
+        </div>
+
+        <div v-show="gruppenErgebnis.length && showGroupsExpanded" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          <div v-for="(gruppe, gIdx) in gruppenErgebnis" :key="gIdx" :data-group="gIdx" class="p-4 bg-slate-800/60 rounded-xl border border-white/10">
+            <h3 class="font-semibold mb-2">Gruppe {{ alphabet[gIdx] }}</h3>
+            <ol class="list-decimal list-inside space-y-2">
+              <li v-for="(team, tIdx) in gruppe" :key="tIdx"
+                  :class="['text-slate-200', tIdx===0 ? 'bg-emerald-700/30 border border-emerald-500/30 rounded-md p-2' : (tIdx===1 ? 'bg-emerald-500/20 border border-emerald-400/30 rounded-md p-2' : '')]">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="font-medium" @dblclick="renameTeam(team)">{{ team.name }}</div>
+                  <div class="no-print flex items-center gap-1">
+                    <button class="px-2 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 border border-white/10" @click="moveGroupTeam(gIdx, tIdx, -1)" :disabled="tIdx === 0">↑</button>
+                    <button class="px-2 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 border border-white/10" @click="moveGroupTeam(gIdx, tIdx, 1)" :disabled="tIdx === gruppe.length - 1">↓</button>
+                  </div>
+                </div>
+                <div v-if="team.mitglieder && team.mitglieder.length" class="mt-1 flex gap-1 flex-wrap">
+                  <span v-for="(m,i) in team.mitglieder" :key="i" class="member-chip">{{ m }}</span>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <div v-if="gruppenErgebnis.length" class="no-print">
+          <button @click="koAusGruppen" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-semibold shadow-lg shadow-emerald-900/20">
+            KO-Phase aus Gruppen generieren
+          </button>
+        </div>
+        <div v-else class="text-slate-400">Keine Daten. Füge Spieler hinzu und starte die Auslosung.</div>
+      </div>
+
+      <!-- KO-Bracket (SVG-basiertes Layout) -->
+      <div v-if="bracketRounds.length" class="overflow-x-auto mt-4">
+        <svg :viewBox="`0 0 ${svgWidth} ${svgHeight}`" width="100%" :style="{ height: svgHeight + 'px' }" class="w-full">
+          <!-- Connectoren -->
+          <g v-for="(c, idx) in connectors" :key="'c'+idx">
+            <path :d="c.d" stroke="rgba(148,163,184,0.35)" stroke-width="2" fill="none"></path>
+          </g>
+
+          <!-- Matches -->
+          <g v-for="(round, rIdx) in bracketRounds" :key="'round'+rIdx">
+            <g v-for="(pair, mIdx) in getMatches(rIdx)" :key="'m'+rIdx+'-'+mIdx" :transform="`translate(${colX(rIdx)}, ${yTop(rIdx, mIdx)})`">
+              <!-- Box -->
+              <rect :width="colWidth" :height="matchHeight" rx="10" fill="rgba(15,23,42,0.6)" stroke="rgba(255,255,255,0.1)"></rect>
+
+              <!-- Teilnehmer A -->
+              <g class="cursor-pointer" @click="setWinner(rIdx, mIdx, 0)">
+                <rect :width="colWidth" :height="matchHeight/2" :data-slot="rIdx === 0 ? (mIdx * 2) : null" fill="transparent"></rect>
+                <text x="12" y="24" font-size="14" :fill="isWinner(rIdx, mIdx, 0) ? '#22c55e' : '#e2e8f0'" @dblclick="renameTeam(pair[0])">{{ pair[0].name || '—' }}</text>
+                <text v-if="pair[0].mitglieder && pair[0].mitglieder.length" x="12" y="44" font-size="12" :fill="isWinner(rIdx, mIdx, 0) ? '#86efac' : '#94a3b8'">{{ pair[0].mitglieder.join(', ') }}</text>
+              </g>
+
+              <!-- Trenner -->
+              <line x1="10" :y1="matchHeight/2" :x2="colWidth-10" :y2="matchHeight/2" stroke="rgba(255,255,255,0.08)"></line>
+
+              <!-- Teilnehmer B -->
+              <g class="cursor-pointer" @click="setWinner(rIdx, mIdx, 1)" :transform="`translate(0, ${matchHeight/2})`">
+                <rect :width="colWidth" :height="matchHeight/2" :data-slot="rIdx === 0 ? (mIdx * 2 + 1) : null" fill="transparent"></rect>
+                <text x="12" y="24" font-size="14" :fill="isWinner(rIdx, mIdx, 1) ? '#22c55e' : '#e2e8f0'" @dblclick="renameTeam(pair[1])">{{ pair[1].name || '—' }}</text>
+                <text v-if="pair[1].mitglieder && pair[1].mitglieder.length" x="12" y="44" font-size="12" :fill="isWinner(rIdx, mIdx, 1) ? '#86efac' : '#94a3b8'">{{ pair[1].mitglieder.join(', ') }}</text>
+              </g>
+            </g>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Sieger-Anzeige -->
+      <div v-if="winnerTeam" class="mt-6 p-4 rounded-xl bg-slate-800/60 border border-white/10 flex items-center gap-3">
+        <div class="text-2xl">👑</div>
+        <div>
+          <div class="text-sm text-slate-400">Sieger</div>
+          <div class="text-lg font-bold text-slate-100">{{ winnerTeam.name }}</div>
+          <div v-if="winnerTeam.mitglieder && winnerTeam.mitglieder.length" class="mt-1 flex gap-1 flex-wrap">
+            <span v-for="(m,i) in winnerTeam.mitglieder" :key="i" class="member-chip">{{ m }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="spielFormat === 'ko'" class="text-slate-400">Keine Daten. Füge Spieler hinzu und starte die Auslosung.</div>
+    </section>
+
+    <!-- Animations-Overlay -->
+    <div v-if="isOverlayVisible" class="overlay">
+      <div class="w-[min(92vw,700px)]">
+        <div class="glass rounded-2xl p-6 text-center pop-in">
+          <div class="text-emerald-400 font-semibold tracking-wide mb-1">{{ overlayTitel }}</div>
+          <div class="text-2xl md:text-3xl font-extrabold mb-3">{{ overlayName }}</div>
+          <div v-if="overlayMitglieder && overlayMitglieder.length" class="flex flex-wrap justify-center gap-2 text-slate-300">
+            <span v-for="(m, i) in overlayMitglieder" :key="i" class="px-2 py-1 rounded-full bg-white/5 border border-white/10 float-up"
+              :style="{ animationDelay: (i*120)+'ms' }">{{ m }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spieler-Dialog -->
+    <div v-if="showSpielerDialog" class="overlay">
+      <div class="w-[min(92vw,780px)]">
+        <div class="glass rounded-2xl p-6 pop-in">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold">Spieler verwalten</h3>
+            <button class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm" @click="closeSpielerDialog()">Schließen</button>
+          </div>
+
+          <div class="flex items-center gap-2 mb-3">
+            <label class="text-sm text-slate-300">Auto-Namen</label>
+            <input type="number" min="2" class="w-24 input" v-model.number="autoSpielerAnzahl" />
+            <button class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10 text-sm" @click="generiereSpieler()">Namen erzeugen</button>
+          </div>
+
+          <textarea class="input h-56 leading-6" v-model="spielerText" placeholder="z.B. Max&#10;Anna&#10;Paul"></textarea>
+          <p class="text-sm text-slate-400 mt-2">{{ spieler.length }} Spieler erkannt</p>
+
+          <div class="mt-4 flex gap-3 justify-end">
+            <button class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-white/10" @click="spielerText = ''">Leeren</button>
+            <button class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 font-semibold" @click="closeSpielerDialog()">Fertig</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script>
+    const { createApp, ref, computed, nextTick, watch, onMounted } = Vue;
+
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+   function nextPowerOfTwo(n) {
+     let p = 1;
+     while (p < n) p <<= 1;
+     return p;
+   }
+
+    createApp({
+      setup() {
+        // State
+        const teamFormat = ref('einzel');
+        const spielFormat = ref('ko');
+        const gruppenModus = ref('anzahl'); // 'anzahl' | 'groesse'
+        const anzahlGruppen = ref(4);
+        const gruppengroesse = ref(4);
+        const autoSpielerAnzahl = ref(16);
+        const spielerText = ref('');
+
+        // Animation/Ergebnis state
+        const isDrawing = ref(false);
+        const isOverlayVisible = ref(false);
+        const overlayTitel = ref('');
+        const overlayName = ref('');
+        const overlayMitglieder = ref([]);
+
+        // Animation Geschwindigkeiten (ms)
+        // - speedTeamsMs/pauseTeamsMs: Spieler/Teams → Gruppen/Teams
+        // - speedBracketMs/pauseBracketMs: Teams/Spieler → KO-Bracket
+        const speedTeamsMs = ref(900);
+        const pauseTeamsMs = ref(300);
+        const speedBracketMs = ref(1100);
+        const pauseBracketMs = ref(400);
+
+
+ 
+        // Dialoge/Ergebnis
+        const showSpielerDialog = ref(false);
+        const showGroupsExpanded = ref(true);
+        const showSettingsExpanded = ref(true);
+        const gruppenErgebnis = ref([]); // Array<Array<Team>>
+        const bracketSlots = ref([]);    // Legacy (nicht mehr für UI genutzt)
+        const bracketRounds = ref([]);   // Array<Runden> für KO
+
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+        const spieler = computed(() => {
+          return spielerText.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        });
+
+        const kannAuslosen = computed(() => {
+          return spieler.value.length >= 2;
+        });
+
+        function generiereSpieler() {
+          const n = Math.max(2, Number(autoSpielerAnzahl.value || 0));
+          const lines = Array.from({ length: n }, (_, i) => `Spieler ${i + 1}`);
+          spielerText.value = lines.join('\n');
+        }
+
+        function baueTeams() {
+          const liste = shuffle(spieler.value);
+          if (teamFormat.value === 'einzel') {
+            return liste.map((name, idx) => ({ name, mitglieder: [name], tag: `P${idx+1}` }));
+          }
+          // Partner: Standard 2er-Teams; bei ungerader Spielerzahl wird ein zufälliges Team zum 3er-Team ergänzt
+          const teams = [];
+          // 2er-Paare bilden
+          for (let i = 0; i + 1 < liste.length; i += 2) {
+            const m = [liste[i], liste[i + 1]];
+            teams.push({ name: `Team ${alphabet[teams.length]}`, mitglieder: m, tag: `T${teams.length + 1}` });
+          }
+          // Rest (1 Spieler) -> zu einem zufälligen Team hinzufügen (ergibt 3er-Team)
+          if (liste.length % 2 === 1) {
+            const rest = liste[liste.length - 1];
+            if (teams.length > 0) {
+              const idx = Math.floor(Math.random() * teams.length);
+              teams[idx] = {
+                ...teams[idx],
+                mitglieder: [...teams[idx].mitglieder, rest],
+              };
+            } else {
+              // Edge-Case: nur 1 Spieler vorhanden
+              teams.push({ name: `Team ${alphabet[teams.length]}`, mitglieder: [rest], tag: `T${teams.length + 1}` });
+            }
+          }
+          return teams;
+        }
+
+        function getMatches(roundIndex) {
+          const arr = bracketRounds.value[roundIndex] || [];
+          const matches = [];
+          for (let i = 0; i < arr.length; i += 2) {
+            matches.push([arr[i] || { name: '', mitglieder: [] }, arr[i+1] || { name: '', mitglieder: [] }]);
+          }
+          return matches;
+        }
+ 
+        // Erzeuge exakt requiredTeams Partner-Teams (2er), überschüssige Spieler als 3. Mitglied verteilen
+        function buildPartnerTeamsForGroups(players, requiredTeams) {
+          const pool = players.slice(); // erwartete Eingabe: bereits gemischt
+          const teams = Array.from({ length: requiredTeams }, (_, idx) => ({
+            name: `Team ${alphabet[idx % alphabet.length]}${idx >= alphabet.length ? Math.floor(idx / alphabet.length) + 1 : ''}`,
+            mitglieder: [],
+            tag: `T${idx + 1}`
+          }));
+ 
+          // Erst je Team 2 Spieler zuweisen (falls genug vorhanden)
+          for (let round = 0; round < 2; round++) {
+            for (let i = 0; i < teams.length && pool.length; i++) {
+              teams[i].mitglieder.push(pool.shift());
+            }
+          }
+ 
+          // Rest gleichmäßig/zufällig als drittes Mitglied verteilen
+          while (pool.length) {
+            const i = Math.floor(Math.random() * teams.length);
+            teams[i].mitglieder.push(pool.shift());
+          }
+ 
+          return teams;
+        }
+
+        // Hilfsfunktion: erzeugt leere Rundenstruktur für ein KO-Bracket
+        function makeEmptyRounds(size) {
+          const rounds = [];
+          let n = size;
+          while (n >= 1) {
+            rounds.push(new Array(n).fill(null));
+            n = Math.floor(n / 2);
+          }
+          return rounds;
+        }
+
+        // Bracket-Geometrie (SVG) – per UI anpassbar
+        const colWidth = ref(360);    // Breite eines Match-Blocks
+        const colGap = ref(120);      // Horizontaler Abstand zwischen Runden
+        const matchHeight = ref(110); // Höhe eines Match-Blocks
+        const gapY = ref(42);         // Vertikaler Basisabstand
+ 
+        function colX(rIdx) {
+          return colGap.value + rIdx * (colWidth.value + colGap.value);
+        }
+        function yStep(rIdx) {
+          return (matchHeight.value + gapY.value) * Math.pow(2, rIdx);
+        }
+        function yCenter(rIdx, mIdx) {
+          return gapY.value / 2 + yStep(rIdx) * (mIdx + 0.5);
+        }
+        function yTop(rIdx, mIdx) {
+          return yCenter(rIdx, mIdx) - matchHeight.value / 2;
+        }
+ 
+        const svgWidth = computed(() => {
+          return colGap.value + (bracketRounds.value.length) * (colWidth.value + colGap.value);
+        });
+        const svgHeight = computed(() => {
+          const baseMatches = (bracketRounds.value[0]?.length || 0) / 2;
+          return gapY.value + baseMatches * (matchHeight.value + gapY.value);
+        });
+
+        const connectors = computed(() => {
+          const res = [];
+          for (let r = 0; r < bracketRounds.value.length - 1; r++) {
+            const round = bracketRounds.value[r];
+            if (!round) continue;
+            const matchCount = round.length / 2;
+            for (let m = 0; m < matchCount; m++) {
+              const x1 = colX(r) + colWidth.value;
+              const y1 = yCenter(r, m);
+              const x2 = colX(r + 1);
+              const y2 = yCenter(r + 1, Math.floor(m / 2));
+              const midX = (x1 + x2) / 2;
+              res.push({ d: `M${x1},${y1} H${midX} V${y2} H${x2}` });
+            }
+          }
+          return res;
+        });
+
+        // Gewinner der letzten Runde
+        const winnerTeam = computed(() => {
+          const rounds = bracketRounds.value;
+          if (!rounds.length) return null;
+          const last = rounds[rounds.length - 1];
+          return last && last[0] ? last[0] : null;
+        });
+
+        // Layout-Abstände für Bracket, damit Runden ab Runde 2
+        // zwischen den Herkunftsspielen ausgerichtet sind
+        function getRoundTopPad(rIdx) {
+          if (rIdx === 0) return 0;
+          const base = 24; // px
+          return Math.pow(2, rIdx - 1) * base;
+        }
+        function getRoundGap(rIdx) {
+          const base = 24; // px
+          return Math.pow(2, rIdx) * base;
+        }
+
+        function zeigeOverlay(title, name, mitglieder) {
+          overlayTitel.value = title;
+          overlayName.value = name;
+          overlayMitglieder.value = mitglieder || [];
+          isOverlayVisible.value = true;
+        }
+
+        function hideOverlay() {
+          isOverlayVisible.value = false;
+        }
+
+        function pulseTarget(el) {
+          if (!el) return;
+          el.classList.add('target-pulse');
+          setTimeout(() => el.classList.remove('target-pulse'), 900);
+        }
+
+        function flyToTarget(targetEl, label, durationMs = 1000) {
+          return new Promise((resolve) => {
+            if (!targetEl) return resolve();
+
+            const startX = window.innerWidth / 2;
+            const startY = window.innerHeight / 2;
+            const rect = targetEl.getBoundingClientRect();
+            const destX = rect.left + rect.width / 2;
+            const destY = rect.top + rect.height / 2;
+
+            const chip = document.createElement('div');
+            chip.className = 'fly-chip';
+            chip.textContent = label || 'Team';
+            chip.style.left = `${startX}px`;
+            chip.style.top = `${startY}px`;
+            chip.style.transform = 'translate(0,0) scale(1) rotate(0deg)';
+            chip.style.transitionDuration = `${durationMs}ms`;
+            document.body.appendChild(chip);
+
+            const dx = destX - startX;
+            const dy = destY - startY;
+            const rot = (Math.random() * 14 - 7).toFixed(2);
+
+            requestAnimationFrame(() => {
+              chip.style.transform = `translate(${dx}px, ${dy}px) scale(0.92) rotate(${rot}deg)`;
+            });
+
+            const done = () => {
+              chip.removeEventListener('transitionend', done);
+              chip.remove();
+              pulseTarget(targetEl);
+              resolve();
+            };
+            chip.addEventListener('transitionend', done);
+          });
+        }
+
+        function setWinner(roundIndex, matchIndex, side) {
+          // Sieger in nächste Runde setzen
+          const source = bracketRounds.value[roundIndex] || [];
+          const team = source[matchIndex * 2 + side];
+          if (!team) return;
+
+          // Runde existiert?
+          if (!bracketRounds.value[roundIndex + 1]) {
+            // keine nächste Runde mehr
+            return;
+          }
+          bracketRounds.value[roundIndex + 1][matchIndex] = team;
+        }
+
+        // Gruppenplatzierungen interaktiv anpassen (↑/↓)
+        function moveGroupTeam(gIdx, tIdx, dir) {
+          const g = gruppenErgebnis.value[gIdx];
+          if (!g) return;
+          const ni = tIdx + dir;
+          if (ni < 0 || ni >= g.length) return;
+          const copy = g.slice();
+          const [item] = copy.splice(tIdx, 1);
+          copy.splice(ni, 0, item);
+          gruppenErgebnis.value[gIdx] = copy;
+        }
+
+        function drucken() {
+          window.print();
+        }
+
+        function openSpielerDialog() {
+          showSpielerDialog.value = true;
+        }
+        function closeSpielerDialog() {
+          showSpielerDialog.value = false;
+        }
+
+        // Teamnamen bearbeiten
+        function renameTeam(team) {
+          if (!team) return;
+          const neu = prompt('Neuer Teamname:', team.name || '');
+          if (neu && neu.trim()) {
+            team.name = neu.trim();
+          }
+        }
+
+        // Gewinner-Highlight pro Match-Zeile
+        function isWinner(roundIndex, matchIndex, side) {
+          const source = bracketRounds.value[roundIndex] || [];
+          const team = source[matchIndex * 2 + side];
+          const next = bracketRounds.value[roundIndex + 1];
+          if (!team) return false;
+          if (next) {
+            return next[matchIndex] === team;
+          }
+          // letzte Runde
+          return (roundIndex === bracketRounds.value.length - 1) && (team === (winnerTeam && winnerTeam.value));
+        }
+
+        // Persistenz (LocalStorage)
+        function saveState() {
+          try {
+            const state = {
+              teamFormat: teamFormat.value,
+              spielFormat: spielFormat.value,
+              gruppenModus: gruppenModus.value,
+              anzahlGruppen: anzahlGruppen.value,
+              gruppengroesse: gruppengroesse.value,
+              autoSpielerAnzahl: autoSpielerAnzahl.value,
+              spielerText: spielerText.value,
+              gruppenErgebnis: gruppenErgebnis.value,
+              bracketRounds: bracketRounds.value,
+              speedTeamsMs: speedTeamsMs.value,
+              pauseTeamsMs: pauseTeamsMs.value,
+              speedBracketMs: speedBracketMs.value,
+              pauseBracketMs: pauseBracketMs.value,
+              showGroupsExpanded: showGroupsExpanded.value,
+              showSettingsExpanded: showSettingsExpanded.value
+            };
+            localStorage.setItem('darts-state', JSON.stringify(state));
+          } catch (e) { /* ignore */ }
+        }
+
+        function loadState() {
+          try {
+            const raw = localStorage.getItem('darts-state');
+            if (!raw) return;
+            const s = JSON.parse(raw);
+            if (s.teamFormat) teamFormat.value = s.teamFormat;
+            if (s.spielFormat) spielFormat.value = s.spielFormat;
+            if (s.gruppenModus) gruppenModus.value = s.gruppenModus;
+            if (typeof s.anzahlGruppen === 'number') anzahlGruppen.value = s.anzahlGruppen;
+            if (typeof s.gruppengroesse === 'number') gruppengroesse.value = s.gruppengroesse;
+            if (typeof s.autoSpielerAnzahl === 'number') autoSpielerAnzahl.value = s.autoSpielerAnzahl;
+            if (typeof s.spielerText === 'string') spielerText.value = s.spielerText;
+            if (Array.isArray(s.gruppenErgebnis)) gruppenErgebnis.value = s.gruppenErgebnis;
+            if (Array.isArray(s.bracketRounds)) bracketRounds.value = s.bracketRounds;
+            if (typeof s.speedTeamsMs === 'number') speedTeamsMs.value = s.speedTeamsMs;
+            if (typeof s.pauseTeamsMs === 'number') pauseTeamsMs.value = s.pauseTeamsMs;
+            if (typeof s.speedBracketMs === 'number') speedBracketMs.value = s.speedBracketMs;
+            if (typeof s.pauseBracketMs === 'number') pauseBracketMs.value = s.pauseBracketMs;
+            if (typeof s.showGroupsExpanded === 'boolean') showGroupsExpanded.value = s.showGroupsExpanded;
+            if (typeof s.showSettingsExpanded === 'boolean') showSettingsExpanded.value = s.showSettingsExpanded;
+          } catch (e) { /* ignore */ }
+        }
+
+        onMounted(loadState);
+        watch(
+          [teamFormat, spielFormat, gruppenModus, anzahlGruppen, gruppengroesse, autoSpielerAnzahl, spielerText, gruppenErgebnis, bracketRounds, speedTeamsMs, pauseTeamsMs, speedBracketMs, pauseBracketMs, showGroupsExpanded, showSettingsExpanded],
+          saveState,
+          { deep: true }
+        );
+
+        async function koAusGruppen() {
+          if (!gruppenErgebnis.value.length) return;
+
+          // Sieger (1.) und Zweiter (2.) je Gruppe bestimmen (basierend auf Auslosungsreihenfolge)
+          const firsts = gruppenErgebnis.value.map(g => g[0]).filter(Boolean);
+          const seconds = gruppenErgebnis.value.map(g => g[1]).filter(Boolean);
+
+          // Paarungen A1 vs B2, B1 vs A2, C1 vs D2, ...
+          const pairs = [];
+          for (let i = 0; i < gruppenErgebnis.value.length; i += 2) {
+            const a1 = firsts[i] || null;
+            const b1 = firsts[i + 1] || null;
+            const a2 = seconds[i] || null;
+            const b2 = seconds[i + 1] || null;
+
+            if (a1 || b2) pairs.push(a1 || { name: '', mitglieder: [] }, b2 || { name: 'Freilos', mitglieder: [] });
+            if (b1 || a2) pairs.push(b1 || { name: '', mitglieder: [] }, a2 || { name: 'Freilos', mitglieder: [] });
+          }
+
+          // Zielgröße Potenz von 2
+          const zielSize = nextPowerOfTwo(pairs.length);
+          while (pairs.length < zielSize) {
+            pairs.push({ name: 'Freilos', mitglieder: [] });
+          }
+
+          bracketRounds.value = makeEmptyRounds(zielSize);
+          bracketRounds.value[0] = pairs.slice(0, zielSize);
+          await nextTick();
+        }
+
+        async function starteAuslosung() {
+          if (!kannAuslosen.value || isDrawing.value) return;
+          isDrawing.value = true;
+
+          const einheiten = baueTeams(); // Teams oder Einzelspieler
+
+          if (spielFormat.value === 'ko') {
+            const gemischt = shuffle(einheiten);
+            const zielSize = nextPowerOfTwo(gemischt.length);
+            const byes = zielSize - gemischt.length;
+            const freilose = Array.from({ length: byes }, (_, i) => ({ name: `Freilos ${i+1}`, mitglieder: [], tag: `F${i+1}` }));
+            const slotQuelle = gemischt.concat(freilose);
+
+            // KO-Rundenstruktur vorbereiten
+            bracketRounds.value = makeEmptyRounds(zielSize);
+            gruppenErgebnis.value = [];
+            await nextTick();
+
+            for (let i = 0; i < slotQuelle.length; i++) {
+              const unit = slotQuelle[i];
+              zeigeOverlay('Auslosung', unit.name, unit.mitglieder);
+              await nextTick();
+
+              const target = document.querySelector(`[data-slot="${i}"]`);
+              // eslint-disable-next-line no-await-in-loop
+              await flyToTarget(target, unit.name, speedBracketMs.value);
+
+              bracketRounds.value[0][i] = unit;
+              hideOverlay();
+              // eslint-disable-next-line no-await-in-loop
+              await new Promise(r => setTimeout(r, pauseBracketMs.value));
+            }
+
+          } else {
+            // Gruppenphase – EXAKTE Einhaltung von Gruppenanzahl und Gruppengröße.
+            // Bei Partnerturnier werden exakt requiredTeams 2er-Teams gebildet; überschüssige Spieler werden zufällig als 3. Mitglied verteilt.
+            const wantedGroupCount = Math.max(1, Number(anzahlGruppen.value || 1));
+            const wantedGroupSize = Math.max(1, Number(gruppengroesse.value || 1));
+            let gAnzahl = wantedGroupCount;
+
+            // Basierend auf Modus ggf. gAnzahl aus Gruppengröße ableiten,
+            // aber wenn Anzahl explizit konfiguriert ist, hat diese Priorität.
+            if (gruppenModus.value === 'groesse' && !anzahlGruppen.value) {
+              const baseUnitsCount = teamFormat.value === 'partner'
+                ? Math.ceil(spieler.value.length / 2)
+                : spieler.value.length;
+              gAnzahl = Math.max(1, Math.ceil(baseUnitsCount / wantedGroupSize));
+            }
+
+            // Einheiten generieren
+            let einheitenFuerGruppen = [];
+            if (teamFormat.value === 'partner') {
+              const requiredTeams = gAnzahl * wantedGroupSize;
+              const shuffledPlayers = shuffle(spieler.value);
+              einheitenFuerGruppen = buildPartnerTeamsForGroups(shuffledPlayers, requiredTeams);
+            } else {
+              const requiredUnits = gAnzahl * wantedGroupSize;
+              const base = shuffle(spieler.value).map((name, idx) => ({ name, mitglieder: [name], tag: `P${idx+1}` }));
+              if (base.length < requiredUnits) {
+                const diff = requiredUnits - base.length;
+                for (let i = 0; i < diff; i++) base.push({ name: `Freilos ${i+1}`, mitglieder: [], tag: `F${i+1}` });
+              }
+              einheitenFuerGruppen = base.slice(0, requiredUnits);
+            }
+
+            // Absicherung auf exakt gAnzahl * wantedGroupSize Teams
+            const required = gAnzahl * wantedGroupSize;
+            if (einheitenFuerGruppen.length > required) {
+              einheitenFuerGruppen = einheitenFuerGruppen.slice(0, required);
+            } else if (einheitenFuerGruppen.length < required) {
+              const diff = required - einheitenFuerGruppen.length;
+              for (let i = 0; i < diff; i++) einheitenFuerGruppen.push({ name: `Freilos ${i+1}`, mitglieder: [], tag: `F${i+1}` });
+            }
+
+            // Gruppen initialisieren
+            gruppenErgebnis.value = Array.from({ length: gAnzahl }, () => []);
+            bracketRounds.value = [];
+            await nextTick();
+
+            const teamsShuffled = shuffle(einheitenFuerGruppen);
+            // Exakte Verteilung in Raster gAnzahl x wantedGroupSize
+            for (let g = 0; g < gAnzahl; g++) {
+              for (let t = 0; t < wantedGroupSize; t++) {
+                const idx = g * wantedGroupSize + t;
+                const unit = teamsShuffled[idx];
+
+                zeigeOverlay(`Gruppe ${alphabet[g]}`, unit.name, unit.mitglieder);
+                await nextTick();
+
+                const target = document.querySelector(`[data-group="${g}"]`);
+                // eslint-disable-next-line no-await-in-loop
+                await flyToTarget(target, unit.name, speedTeamsMs.value);
+
+                gruppenErgebnis.value[g].push(unit);
+                hideOverlay();
+                // eslint-disable-next-line no-await-in-loop
+                await new Promise(r => setTimeout(r, pauseTeamsMs.value));
+              }
+            }
+          }
+
+          isDrawing.value = false;
+        }
+
+        function zuruecksetzen() {
+          isDrawing.value = false;
+          isOverlayVisible.value = false;
+          overlayTitel.value = '';
+          overlayName.value = '';
+          overlayMitglieder.value = [];
+          gruppenErgebnis.value = [];
+          bracketSlots.value = [];
+          bracketRounds.value = [];
+        }
+
+        return {
+          // state
+          teamFormat, spielFormat, gruppenModus, anzahlGruppen, gruppengroesse,
+          autoSpielerAnzahl, spielerText, isDrawing, isOverlayVisible,
+          overlayTitel, overlayName, overlayMitglieder,
+          gruppenErgebnis, bracketRounds, alphabet, showSpielerDialog, showGroupsExpanded, showSettingsExpanded,
+          speedTeamsMs, speedBracketMs, pauseTeamsMs, pauseBracketMs,
+          // computed
+          spieler, kannAuslosen, svgWidth, svgHeight, connectors, winnerTeam,
+          // geometry/constants for SVG template
+          colWidth, matchHeight, colGap, gapY, colX, yTop, yCenter,
+          // methods
+          generiereSpieler, starteAuslosung, zuruecksetzen,
+          getMatches, setWinner, drucken, koAusGruppen,
+          openSpielerDialog, closeSpielerDialog, renameTeam, isWinner,
+          getRoundTopPad, getRoundGap, moveGroupTeam
+        };
+      }
+    }).mount('#app');
+  </script>
+
+  <script>
+    // Tailwind UI helpers
+    document.addEventListener('DOMContentLoaded', () => {
+      const style = document.createElement('style');
+      style.innerHTML = `
+        .input { width: 100%; padding: 0.625rem 0.75rem; border-radius: 0.75rem; background: rgb(15 23 42 / 0.7); border: 1px solid rgb(255 255 255 / 0.08); outline: none; }
+        .input:focus { border-color: rgb(16 185 129); box-shadow: 0 0 0 3px rgb(16 185 129 / 0.15); }
+        .radio { width: 1rem; height: 1rem; accent-color: rgb(16 185 129); }
+      `;
+      document.head.appendChild(style);
+    });
+  </script>
+</body>
+</html>
