@@ -200,24 +200,63 @@
           </button>
         </div>
 
-        <div v-show="gruppenErgebnis.length && showGroupsExpanded" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-          <div v-for="(gruppe, gIdx) in gruppenErgebnis" :key="gIdx" :data-group="gIdx" class="p-4 bg-slate-800/60 rounded-xl border border-white/10">
-            <h3 class="font-semibold mb-2">Gruppe {{ alphabet[gIdx] }}</h3>
-            <ol class="list-decimal list-inside space-y-2">
-              <li v-for="(team, tIdx) in gruppe" :key="tIdx"
-                  :class="['text-slate-200', tIdx===0 ? 'bg-emerald-700/30 border border-emerald-500/30 rounded-md p-2' : (tIdx===1 ? 'bg-emerald-500/20 border border-emerald-400/30 rounded-md p-2' : '')]">
-                <div class="flex items-center justify-between gap-2">
-                  <div class="font-medium" @dblclick="renameTeam(team)">{{ team.name }}</div>
-                  <div class="no-print flex items-center gap-1">
-                    <button class="px-2 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 border border-white/10" @click="moveGroupTeam(gIdx, tIdx, -1)" :disabled="tIdx === 0">↑</button>
-                    <button class="px-2 py-1 text-xs rounded bg-slate-800 hover:bg-slate-700 border border-white/10" @click="moveGroupTeam(gIdx, tIdx, 1)" :disabled="tIdx === gruppe.length - 1">↓</button>
-                  </div>
+        <div v-show="gruppenErgebnis.length && showGroupsExpanded" class="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-4">
+          <div v-for="(gruppe, gIdx) in gruppenErgebnis" :key="gIdx" :data-group="gIdx" class="p-3 md:p-4 bg-slate-800/60 rounded-xl border border-white/10">
+            <h3 class="font-semibold mb-3">Gruppe {{ alphabet[gIdx] }}</h3>
+
+            <!-- Tabelle -->
+            <table class="w-full text-left text-sm mb-4">
+              <thead>
+                <tr class="border-b border-white/10">
+                  <th class="p-1 md:p-2">#</th>
+                  <th class="p-1 md:p-2">Team</th>
+                  <th class="p-1 md:p-2 text-center" title="Spiele">Sp</th>
+                  <th class="p-1 md:p-2 text-center" title="Siege/Niederlagen">S/N</th>
+                  <th class="p-1 md:p-2 text-center" title="Legs">Legs</th>
+                  <th class="p-1 md:p-2 text-center" title="Legdifferenz">Diff</th>
+                  <th class="p-1 md:p-2 text-center font-bold" title="Punkte">Pkt</th>
+                </tr>
+              </thead>
+              <tbody v-if="gruppenTabellen[gIdx] && gruppenTabellen[gIdx].length">
+                <tr v-for="(row, rIdx) in gruppenTabellen[gIdx]" :key="row.team.tag"
+                    :class="['border-b border-white/10 last:border-0', rIdx === 0 ? 'bg-emerald-600/20' : (rIdx === 1 ? 'bg-emerald-600/10' : '')]">
+                  <td class="p-1 md:p-2 font-mono">{{ rIdx + 1 }}.</td>
+                  <td class="p-1 md:p-2 font-semibold text-slate-100 break-words">
+                    <div @dblclick="renameTeam(row.team)">{{ row.team.name }}</div>
+                    <div v-if="teamFormat === 'partner' && row.team.mitglieder && row.team.mitglieder.length" class="mt-1 flex gap-1 flex-wrap font-normal">
+                      <span v-for="(m,i) in row.team.mitglieder" :key="i" class="member-chip">{{ m }}</span>
+                    </div>
+                  </td>
+                  <td class="p-1 md:p-2 text-center text-slate-300">{{ row.spiele }}</td>
+                  <td class="p-1 md:p-2 text-center text-slate-300">{{ row.s }}/{{ row.n }}</td>
+                  <td class="p-1 md:p-2 text-center text-slate-300">{{ row.legsPlus }}:{{ row.legsMinus }}</td>
+                  <td class="p-1 md:p-2 text-center text-slate-300">{{ row.diff > 0 ? '+' : '' }}{{ row.diff }}</td>
+                  <td class="p-1 md:p-2 text-center font-bold text-slate-100">{{ row.pkt }}</td>
+                </tr>
+              </tbody>
+              <tbody v-else>
+                <tr v-for="(team, tIdx) in gruppe" :key="tIdx">
+                  <td class="p-1 md:p-2 font-mono">{{ tIdx + 1 }}.</td>
+                  <td class="p-1 md:p-2" colspan="6" @dblclick="renameTeam(team)">{{ team.name }}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Spielplan -->
+            <div v-if="gruppenSpiele[gIdx] && gruppenSpiele[gIdx].length">
+              <h4 class="font-semibold text-slate-300 mb-2 mt-4 text-base">Spielplan</h4>
+              <div class="space-y-2">
+                <div v-for="(spiel, sIdx) in gruppenSpiele[gIdx]" :key="sIdx" class="grid grid-cols-[1fr_auto_3rem_auto_3rem_auto_1fr] items-center gap-1.5 text-sm">
+                  <div class="text-right truncate font-medium" :title="spiel.teamA.name">{{ spiel.teamA.name }}</div>
+                  <div class="text-slate-500">-</div>
+                  <input type="number" min="0" class="input text-center p-1 h-8 rounded-md" v-model.number="spiel.scoreA" @focus="$event.target.select()" />
+                  <div class="text-slate-400">:</div>
+                  <input type="number" min="0" class="input text-center p-1 h-8 rounded-md" v-model.number="spiel.scoreB" @focus="$event.target.select()" />
+                  <div class="text-slate-500">-</div>
+                  <div class="text-left truncate font-medium" :title="spiel.teamB.name">{{ spiel.teamB.name }}</div>
                 </div>
-                <div v-if="team.mitglieder && team.mitglieder.length" class="mt-1 flex gap-1 flex-wrap">
-                  <span v-for="(m,i) in team.mitglieder" :key="i" class="member-chip">{{ m }}</span>
-                </div>
-              </li>
-            </ol>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -230,7 +269,7 @@
       </div>
 
       <!-- KO-Bracket (SVG-basiertes Layout) -->
-      <div v-if="bracketRounds.length" class="overflow-x-auto mt-4">
+      <div v-if="bracketRounds.length" class="overflow-auto max-h-[80vh] mt-4">
         <svg :viewBox="`0 0 ${svgWidth} ${svgHeight}`" width="100%" :style="{ height: svgHeight + 'px' }" class="w-full">
           <!-- Connectoren -->
           <g v-for="(c, idx) in connectors" :key="'c'+idx">
@@ -360,10 +399,10 @@
         // Animation Geschwindigkeiten (ms)
         // - speedTeamsMs/pauseTeamsMs: Spieler/Teams → Gruppen/Teams
         // - speedBracketMs/pauseBracketMs: Teams/Spieler → KO-Bracket
-        const speedTeamsMs = ref(900);
+        const speedTeamsMs = ref(2100);
         const pauseTeamsMs = ref(300);
-        const speedBracketMs = ref(1100);
-        const pauseBracketMs = ref(400);
+        const speedBracketMs = ref(1800);
+        const pauseBracketMs = ref(300);
 
 
  
@@ -372,6 +411,7 @@
         const showGroupsExpanded = ref(true);
         const showSettingsExpanded = ref(true);
         const gruppenErgebnis = ref([]); // Array<Array<Team>>
+        const gruppenSpiele = ref([]);   // Array<Gruppe<Match>>
         const bracketSlots = ref([]);    // Legacy (nicht mehr für UI genutzt)
         const bracketRounds = ref([]);   // Array<Runden> für KO
 
@@ -385,10 +425,82 @@
           return spieler.value.length >= 2;
         });
 
+        const gruppenTabellen = computed(() => {
+          return gruppenErgebnis.value.map((gruppe, gIdx) => {
+            if (!gruppe.length) return [];
+            const teamStats = {};
+            
+            gruppe.forEach(team => {
+              if (team.tag) { // 'Freilos' hat keinen tag
+                teamStats[team.tag] = { team, spiele: 0, s: 0, n: 0, legsPlus: 0, legsMinus: 0, diff: 0, pkt: 0 };
+              }
+            });
+ 
+            const spiele = gruppenSpiele.value[gIdx] || [];
+            spiele.forEach(spiel => {
+              const { teamA, teamB, scoreA, scoreB } = spiel;
+              if (scoreA === null || scoreB === null || scoreA === '' || scoreB === '' || scoreA === scoreB) return;
+ 
+              const statsA = teamStats[teamA.tag];
+              const statsB = teamStats[teamB.tag];
+              if (!statsA || !statsB) return;
+ 
+              statsA.spiele++;
+              statsB.spiele++;
+              statsA.legsPlus += Number(scoreA);
+              statsA.legsMinus += Number(scoreB);
+              statsB.legsPlus += Number(scoreB);
+              statsB.legsMinus += Number(scoreA);
+              statsA.diff = statsA.legsPlus - statsA.legsMinus;
+              statsB.diff = statsB.legsPlus - statsB.legsMinus;
+ 
+              if (scoreA > scoreB) {
+                statsA.s++;
+                statsB.n++;
+                statsA.pkt += 2;
+              } else if (scoreB > scoreA) {
+                statsB.s++;
+                statsA.n++;
+                statsB.pkt += 2;
+              }
+            });
+ 
+            const tabelle = Object.values(teamStats);
+            tabelle.sort((a, b) => {
+              if (b.pkt !== a.pkt) return b.pkt - a.pkt;
+              if (b.diff !== a.diff) return b.diff - a.diff;
+              if (b.legsPlus !== a.legsPlus) return b.legsPlus - a.legsPlus;
+              return 0;
+            });
+ 
+            return tabelle;
+          });
+        });
+
         function generiereSpieler() {
           const n = Math.max(2, Number(autoSpielerAnzahl.value || 0));
           const lines = Array.from({ length: n }, (_, i) => `Spieler ${i + 1}`);
           spielerText.value = lines.join('\n');
+        }
+
+        function generiereGruppenSpiele() {
+          const spiele = [];
+          for (const gruppe of gruppenErgebnis.value) {
+            const gruppenSpiele = [];
+            const teamsInGruppe = gruppe.filter(t => t.tag && !t.name.includes('Freilos'));
+            for (let i = 0; i < teamsInGruppe.length; i++) {
+              for (let j = i + 1; j < teamsInGruppe.length; j++) {
+                gruppenSpiele.push({
+                  teamA: teamsInGruppe[i],
+                  teamB: teamsInGruppe[j],
+                  scoreA: null,
+                  scoreB: null,
+                });
+              }
+            }
+            spiele.push(gruppenSpiele);
+          }
+          gruppenSpiele.value = spiele;
         }
 
         function baueTeams() {
@@ -546,44 +658,62 @@
           el.classList.add('target-pulse');
           setTimeout(() => el.classList.remove('target-pulse'), 900);
         }
-
+ 
         function flyToTarget(targetEl, label, durationMs = 1000) {
           return new Promise((resolve) => {
             if (!targetEl) return resolve();
-
-            const startX = window.innerWidth / 2;
-            const startY = window.innerHeight / 2;
-            const rect = targetEl.getBoundingClientRect();
-            const destX = rect.left + rect.width / 2;
-            const destY = rect.top + rect.height / 2;
-
-            const chip = document.createElement('div');
-            chip.className = 'fly-chip';
-            chip.textContent = label || 'Team';
-            chip.style.left = `${startX}px`;
-            chip.style.top = `${startY}px`;
-            chip.style.transform = 'translate(0,0) scale(1) rotate(0deg)';
-            chip.style.transitionDuration = `${durationMs}ms`;
-            document.body.appendChild(chip);
-
-            const dx = destX - startX;
-            const dy = destY - startY;
-            const rot = (Math.random() * 14 - 7).toFixed(2);
-
+ 
+            // Scroll target into view instantly. This avoids timing issues with smooth scrolling.
+            if (targetEl instanceof SVGElement) {
+              const scrollContainer = targetEl.ownerSVGElement.parentElement;
+              if (scrollContainer && typeof scrollContainer.scrollTo === 'function') {
+                const targetRect = targetEl.getBoundingClientRect();
+                const containerRect = scrollContainer.getBoundingClientRect();
+                const scrollLeft = scrollContainer.scrollLeft + targetRect.left - containerRect.left - (containerRect.width / 2) + (targetRect.width / 2);
+                const scrollTop = scrollContainer.scrollTop + targetRect.top - containerRect.top - (containerRect.height / 2) + (targetRect.height / 2);
+                scrollContainer.scrollTo({ left: scrollLeft, top: scrollTop, behavior: 'auto' });
+              }
+            } else {
+              targetEl.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'center' });
+            }
+ 
+            // Use requestAnimationFrame to ensure the browser has repainted after the instant scroll.
             requestAnimationFrame(() => {
-              chip.style.transform = `translate(${dx}px, ${dy}px) scale(0.92) rotate(${rot}deg)`;
+              const startX = window.innerWidth / 2;
+              const startY = window.innerHeight / 2;
+              const rect = targetEl.getBoundingClientRect();
+              const destX = rect.left + rect.width / 2;
+              const destY = rect.top + rect.height / 2;
+ 
+              const chip = document.createElement('div');
+              chip.className = 'fly-chip';
+              chip.textContent = label || 'Team';
+              chip.style.left = `${startX}px`;
+              chip.style.top = `${startY}px`;
+              chip.style.transform = 'translate(0,0) scale(1) rotate(0deg)';
+              chip.style.transitionDuration = `${durationMs}ms`;
+              document.body.appendChild(chip);
+ 
+              const dx = destX - startX;
+              const dy = destY - startY;
+              const rot = (Math.random() * 14 - 7).toFixed(2);
+ 
+              // This needs to be in a nested rAF to ensure the transition is applied correctly after the element is painted.
+              requestAnimationFrame(() => {
+                chip.style.transform = `translate(${dx}px, ${dy}px) scale(0.92) rotate(${rot}deg)`;
+              });
+ 
+              const done = () => {
+                chip.removeEventListener('transitionend', done);
+                chip.remove();
+                pulseTarget(targetEl);
+                resolve();
+              };
+              chip.addEventListener('transitionend', done);
             });
-
-            const done = () => {
-              chip.removeEventListener('transitionend', done);
-              chip.remove();
-              pulseTarget(targetEl);
-              resolve();
-            };
-            chip.addEventListener('transitionend', done);
           });
         }
-
+ 
         function setWinner(roundIndex, matchIndex, side) {
           // Sieger in nächste Runde setzen
           const source = bracketRounds.value[roundIndex] || [];
@@ -656,6 +786,7 @@
               spielerText: spielerText.value,
               gruppenErgebnis: gruppenErgebnis.value,
               bracketRounds: bracketRounds.value,
+              gruppenSpiele: gruppenSpiele.value,
               speedTeamsMs: speedTeamsMs.value,
               pauseTeamsMs: pauseTeamsMs.value,
               speedBracketMs: speedBracketMs.value,
@@ -681,6 +812,7 @@
             if (typeof s.spielerText === 'string') spielerText.value = s.spielerText;
             if (Array.isArray(s.gruppenErgebnis)) gruppenErgebnis.value = s.gruppenErgebnis;
             if (Array.isArray(s.bracketRounds)) bracketRounds.value = s.bracketRounds;
+            if (Array.isArray(s.gruppenSpiele)) gruppenSpiele.value = s.gruppenSpiele;
             if (typeof s.speedTeamsMs === 'number') speedTeamsMs.value = s.speedTeamsMs;
             if (typeof s.pauseTeamsMs === 'number') pauseTeamsMs.value = s.pauseTeamsMs;
             if (typeof s.speedBracketMs === 'number') speedBracketMs.value = s.speedBracketMs;
@@ -692,15 +824,37 @@
 
         onMounted(loadState);
         watch(
-          [teamFormat, spielFormat, gruppenModus, anzahlGruppen, gruppengroesse, autoSpielerAnzahl, spielerText, gruppenErgebnis, bracketRounds, speedTeamsMs, pauseTeamsMs, speedBracketMs, pauseBracketMs, showGroupsExpanded, showSettingsExpanded],
+          [teamFormat, spielFormat, gruppenModus, anzahlGruppen, gruppengroesse, autoSpielerAnzahl, spielerText, gruppenErgebnis, bracketRounds, speedTeamsMs, pauseTeamsMs, speedBracketMs, pauseBracketMs, showGroupsExpanded, showSettingsExpanded, gruppenSpiele],
           saveState,
           { deep: true }
         );
 
+        watch(gruppenTabellen, (newTabellen) => {
+          if (!newTabellen.length) return;
+          const needsUpdate = newTabellen.some((tabelle, gIdx) => {
+            const sortedTeams = tabelle.map(row => row.team);
+            return JSON.stringify(gruppenErgebnis.value[gIdx]) !== JSON.stringify(sortedTeams);
+          });
+
+          if (needsUpdate) {
+            const newGruppenErgebnis = newTabellen.map(tabelle => tabelle.map(row => row.team));
+            // Fülle leere Plätze mit Freilosen auf, falls vorhanden
+            gruppenErgebnis.value.forEach((oldGruppe, gIdx) => {
+              const anzahlOriginal = oldGruppe.length;
+              const anzahlNeu = newGruppenErgebnis[gIdx].length;
+              if (anzahlNeu < anzahlOriginal) {
+                const freilose = oldGruppe.filter(t => t.name.includes('Freilos'));
+                newGruppenErgebnis[gIdx].push(...freilose);
+              }
+            });
+            gruppenErgebnis.value = newGruppenErgebnis;
+          }
+        }, { deep: true });
+
         async function koAusGruppen() {
           if (!gruppenErgebnis.value.length) return;
 
-          // Sieger (1.) und Zweiter (2.) je Gruppe bestimmen (basierend auf Auslosungsreihenfolge)
+          // Sieger (1.) und Zweiter (2.) je Gruppe bestimmen (basierend auf der Tabellenreihenfolge)
           const firsts = gruppenErgebnis.value.map(g => g[0]).filter(Boolean);
           const seconds = gruppenErgebnis.value.map(g => g[1]).filter(Boolean);
 
@@ -712,7 +866,7 @@
             const a2 = seconds[i] || null;
             const b2 = seconds[i + 1] || null;
 
-            if (a1 || b2) pairs.push(a1 || { name: '', mitglieder: [] }, b2 || { name: 'Freilos', mitglieder: [] });
+            if (a1 || b2) pairs.push(a1 || { name: 'Freilos', mitglieder: [] }, b2 || { name: 'Freilos', mitglieder: [] });
             if (b1 || a2) pairs.push(b1 || { name: '', mitglieder: [] }, a2 || { name: 'Freilos', mitglieder: [] });
           }
 
@@ -803,6 +957,7 @@
 
             // Gruppen initialisieren
             gruppenErgebnis.value = Array.from({ length: gAnzahl }, () => []);
+            gruppenSpiele.value = [];
             bracketRounds.value = [];
             await nextTick();
 
@@ -826,6 +981,8 @@
                 await new Promise(r => setTimeout(r, pauseTeamsMs.value));
               }
             }
+            
+            generiereGruppenSpiele();
           }
 
           isDrawing.value = false;
@@ -838,6 +995,7 @@
           overlayName.value = '';
           overlayMitglieder.value = [];
           gruppenErgebnis.value = [];
+          gruppenSpiele.value = [];
           bracketSlots.value = [];
           bracketRounds.value = [];
         }
@@ -848,6 +1006,7 @@
           autoSpielerAnzahl, spielerText, isDrawing, isOverlayVisible,
           overlayTitel, overlayName, overlayMitglieder,
           gruppenErgebnis, bracketRounds, alphabet, showSpielerDialog, showGroupsExpanded, showSettingsExpanded,
+          gruppenSpiele, gruppenTabellen,
           speedTeamsMs, speedBracketMs, pauseTeamsMs, pauseBracketMs,
           // computed
           spieler, kannAuslosen, svgWidth, svgHeight, connectors, winnerTeam,
@@ -857,7 +1016,7 @@
           generiereSpieler, starteAuslosung, zuruecksetzen,
           getMatches, setWinner, drucken, koAusGruppen,
           openSpielerDialog, closeSpielerDialog, renameTeam, isWinner,
-          getRoundTopPad, getRoundGap, moveGroupTeam
+          getRoundTopPad, getRoundGap, moveGroupTeam, generiereGruppenSpiele
         };
       }
     }).mount('#app');
@@ -871,6 +1030,10 @@
         .input { width: 100%; padding: 0.625rem 0.75rem; border-radius: 0.75rem; background: rgb(15 23 42 / 0.7); border: 1px solid rgb(255 255 255 / 0.08); outline: none; }
         .input:focus { border-color: rgb(16 185 129); box-shadow: 0 0 0 3px rgb(16 185 129 / 0.15); }
         .radio { width: 1rem; height: 1rem; accent-color: rgb(16 185 129); }
+        /* Hide number input spinners */
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
       `;
       document.head.appendChild(style);
     });
